@@ -32,12 +32,12 @@ fn handle_post_event(body: web::Payload) -> Box<dyn Future<Item=HttpResponse, Er
                 body.extend_from_slice(&chunk);
                 Ok::<_, actix_web::Error>(body)
             }).and_then(|body| {
-                serde_json::from_slice::<serde_json::Value>(&body)
-                    .into_future()
-                    .map_err(|e| actix_web::error::ErrorBadRequest(format!("{}", e)))
-            }).and_then(|json| {
-                invoke_function(Some(json))
-            })
+            serde_json::from_slice::<serde_json::Value>(&body)
+                .into_future()
+                .map_err(|e| actix_web::error::ErrorBadRequest(format!("{}", e)))
+        }).and_then(|json| {
+            invoke_function(Some(json))
+        })
     )
 }
 
