@@ -1,7 +1,8 @@
 extern crate serde_json;
 extern crate futures;
+extern crate function;
 
-use crate::function::function;
+use function::function;
 use self::futures::{IntoFuture, Future, Stream};
 use actix_web::{App, HttpServer, web, HttpResponse};
 use actix_web::web::BytesMut;
