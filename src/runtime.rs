@@ -7,6 +7,7 @@ use self::futures::{IntoFuture, Future, Stream};
 use actix_web::{App, HttpServer, web, HttpResponse};
 use actix_web::web::BytesMut;
 use std::net::SocketAddr;
+use std::env;
 
 fn invoke_function(value: Option<serde_json::Value>) -> impl Future<Item=HttpResponse, Error=actix_web::Error> {
     function(value)
@@ -42,8 +43,15 @@ fn handle_post_event(body: web::Payload) -> Box<dyn Future<Item=HttpResponse, Er
     )
 }
 
+const PORT_ENV: &str = "ENV";
+
 pub fn start_runtime() {
-    let addr: SocketAddr = ([127, 0, 0, 1], 8080).into();
+    let port: usize = env::var(PORT_ENV)
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8080);
+
+    let addr: SocketAddr = ([127, 0, 0, 1], port).into();
 
     HttpServer::new(|| {
         App::new()
