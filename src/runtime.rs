@@ -46,9 +46,9 @@ fn handle_post_event(body: web::Payload) -> Box<dyn Future<Item=HttpResponse, Er
 const PORT_ENV: &str = "ENV";
 
 pub fn start_runtime() {
-    let port: usize = env::var(PORT_ENV)
+    let port: u16 = env::var(PORT_ENV)
         .ok()
-        .and_then(|s| s.parse::<usize>().ok())
+        .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(8080);
 
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();
