@@ -58,12 +58,14 @@ pub struct Payload {
     pub data: String,
 }
 
+type PayloadResult<T, E> = Option<Result<T, E>>;
+
 pub trait Writer<T: Sized, E: std::error::Error> {
     fn write_payload(&mut self, content_type: &str, value: T) -> Result<(), E>;
 }
 
 pub trait Reader<T: Sized, E: std::error::Error> {
-    fn read_payload(&self) -> Result<Option<(String, T)>, E>;
+    fn read_payload(&self) -> PayloadResult<T, E>;
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -126,14 +128,23 @@ impl Writer<serde_json::Value, serde_json::Error> for Event {
 }
 
 impl Reader<serde_json::Value, serde_json::Error> for Event {
-    fn read_payload(&self) -> Result<Option<(String, serde_json::Value)>, serde_json::Error> {
+    fn read_payload(&self) -> PayloadResult<serde_json::Value, serde_json::Error> {
         if self.payload.is_none() {
-            return Ok(None);
+            return None;
         }
 
         let p = self.payload.as_ref().unwrap();
-        let j = serde_json::from_str::<serde_json::Value>(p.data.as_str())?;
-        Ok(Some((p.content_type.clone(), j)))
+        Some(serde_json::from_str::<serde_json::Value>(p.data.as_str()))
+    }
+}
+
+impl Reader<serde_json::Value, serde_json::Error> for Option<Event> {
+    fn read_payload(&self) -> PayloadResult<serde_json::Value, serde_json::Error> {
+        if let Some(r) = self {
+            r.read_payload()
+        } else {
+            None
+        }
     }
 }
 

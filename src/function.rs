@@ -5,12 +5,10 @@ pub fn function(
     event: Option<Event>,
 ) -> Box<dyn futures::Future<Item = Option<Event>, Error = actix_web::Error>> {
     println!("Received {:?}", event);
+
     let input_json = event
-        .iter()
-        .flat_map(Event::read_payload)
-        .flatten()
-        .last()
-        .map(|(_, v)| v)
+        .read_payload()
+        .and_then(|e| e.ok())
         .unwrap_or(serde_json::Value::Null);
 
     println!("Input json: {}", input_json);
