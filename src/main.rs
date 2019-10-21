@@ -1,6 +1,13 @@
-mod runtime;
+use rust_faas::start_runtime;
+
+#[cfg(not(feature = "external-function"))]
 mod function;
 
+#[cfg(feature = "external-function")]
+extern crate function;
+#[cfg(feature = "external-function")]
+use function;
+
 fn main() {
-    runtime::start_runtime(function::function)
+    start_runtime(function::function)
 }
