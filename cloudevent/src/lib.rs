@@ -4,6 +4,9 @@ extern crate serde;
 extern crate serde_json;
 extern crate uuid;
 
+#[macro_use]
+extern crate derive_builder;
+
 pub mod http;
 
 use chrono::{DateTime, FixedOffset};
@@ -60,15 +63,55 @@ pub struct Payload {
 
 type PayloadResult<T, E> = Option<Result<T, E>>;
 
-pub trait Writer<T: Sized, E: std::error::Error> {
+pub trait Writer<T: Sized, E: std::error::Error>
+where
+    Self: Sized + Clone,
+{
     fn write_payload(&mut self, content_type: &str, value: T) -> Result<(), E>;
+
+    fn clone_with_new_payload(&self, content_type: &str, value: T) -> Result<Self, E> {
+        let mut new = self.clone();
+        new.write_payload(content_type, value)?;
+        Ok(new)
+    }
 }
 
 pub trait Reader<T: Sized, E: std::error::Error> {
-    fn read_payload(&self) -> PayloadResult<T, E>;
+    fn read_payload(&self) -> PayloadResult<T, E> {
+        self.read_payload_with_content_type()
+            .map(|res| res.map(|(_, val)| val))
+    }
+
+    fn read_payload_with_content_type(&self) -> PayloadResult<(String, T), E>;
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub trait Mapper<T: Sized, E: std::error::Error, F: Fn(T) -> T>
+where
+    Self: Sized,
+{
+    fn map_payload(&self, f: F) -> Result<Self, E>;
+}
+
+impl<
+        T: Sized,
+        E: std::error::Error,
+        F: Fn(T) -> T,
+        S: Writer<T, E> + Reader<T, E> + Clone + Sized,
+    > Mapper<T, E, F> for S
+{
+    fn map_payload(&self, f: F) -> Result<Self, E> {
+        if let Some(Ok((ct, value))) = self.read_payload_with_content_type() {
+            let mut new = self.clone();
+            new.write_payload(&ct, f(value))?;
+            return Ok(new);
+        } else {
+            return Ok(self.clone());
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Builder)]
+#[builder(setter(into, strip_option))]
 pub struct Event {
     pub id: String,
 
@@ -80,13 +123,17 @@ pub struct Event {
     #[serde(rename = "type")]
     pub event_type: String,
 
+    #[builder(default)]
     pub subject: Option<String>,
+    #[builder(default)]
     pub time: Option<DateTime<FixedOffset>>,
 
     #[serde(flatten)]
+    #[builder(default)]
     pub payload: Option<Payload>,
 
     #[serde(flatten)]
+    #[builder(default)]
     pub extensions: HashMap<String, String>,
 }
 
@@ -128,20 +175,27 @@ impl Writer<serde_json::Value, serde_json::Error> for Event {
 }
 
 impl Reader<serde_json::Value, serde_json::Error> for Event {
-    fn read_payload(&self) -> PayloadResult<serde_json::Value, serde_json::Error> {
+    fn read_payload_with_content_type(
+        &self,
+    ) -> PayloadResult<(String, serde_json::Value), serde_json::Error> {
         if self.payload.is_none() {
             return None;
         }
 
         let p = self.payload.as_ref().unwrap();
-        Some(serde_json::from_str::<serde_json::Value>(p.data.as_str()))
+        Some(
+            serde_json::from_str::<serde_json::Value>(p.data.as_str())
+                .map(|j| (p.content_type.clone(), j)),
+        )
     }
 }
 
 impl Reader<serde_json::Value, serde_json::Error> for Option<Event> {
-    fn read_payload(&self) -> PayloadResult<serde_json::Value, serde_json::Error> {
+    fn read_payload_with_content_type(
+        &self,
+    ) -> PayloadResult<(String, serde_json::Value), serde_json::Error> {
         if let Some(r) = self {
-            r.read_payload()
+            r.read_payload_with_content_type()
         } else {
             None
         }
