@@ -26,8 +26,8 @@ pub enum SpecVersion {
     V02,
     #[serde(rename = "0.3")]
     V03,
-    #[serde(rename = "1.0-rc1")]
-    V10RC1,
+    #[serde(rename = "1.0")]
+    V10,
 }
 
 impl fmt::Display for SpecVersion {
@@ -35,7 +35,7 @@ impl fmt::Display for SpecVersion {
         match self {
             SpecVersion::V02 => write!(f, "0.2"),
             SpecVersion::V03 => write!(f, "0.3"),
-            SpecVersion::V10RC1 => write!(f, "1.0-rc1"),
+            SpecVersion::V10 => write!(f, "1.0"),
         }
     }
 }
@@ -47,7 +47,7 @@ impl TryFrom<String> for SpecVersion {
         match value.as_str() {
             "0.2" => Ok(SpecVersion::V02),
             "0.3" => Ok(SpecVersion::V03),
-            "1.0-rc1" => Ok(SpecVersion::V10RC1),
+            "1.0-rc1" => Ok(SpecVersion::V10),
             _ => Err(format!("Invalid specversion {}", value)),
         }
     }
@@ -143,19 +143,13 @@ impl Event {
         Event {
             id: Uuid::new_v4().to_string(),
             source: get_hostname().unwrap_or(DEFAULT_SOURCE.to_string()),
-            spec_version: SpecVersion::V10RC1,
+            spec_version: SpecVersion::V03,
             event_type: DEFAULT_TYPE.to_string(),
             subject: None,
             time: None,
             payload: None,
             extensions: HashMap::new(),
         }
-    }
-
-    pub fn new_V03() -> Event {
-        let mut ce = Event::new();
-        ce.spec_version = SpecVersion::V03;
-        ce
     }
 }
 
@@ -211,7 +205,7 @@ mod tests {
     #[test]
     fn test_serialize_no_payload_no_extensions() {
         let expected_id = "A234-1234-1234";
-        let expected_spec_version = SpecVersion::V10RC1;
+        let expected_spec_version = SpecVersion::V10;
         let expected_type = "com.github.pull.create";
         let expected_source = "https://github.com/cloudevents/spec/pull";
         let expected_subject = "123";
@@ -241,7 +235,7 @@ mod tests {
     #[test]
     fn test_serialize_no_payload_with_extensions() {
         let expected_id = "A234-1234-1234";
-        let expected_spec_version = SpecVersion::V10RC1;
+        let expected_spec_version = SpecVersion::V10;
         let expected_type = "com.github.pull.create";
         let expected_source = "https://github.com/cloudevents/spec/pull";
         let expected_subject = "123";
@@ -274,7 +268,7 @@ mod tests {
     #[test]
     fn test_serialize_with_payload_with_extensions() {
         let expected_id = "A234-1234-1234";
-        let expected_spec_version = SpecVersion::V10RC1;
+        let expected_spec_version = SpecVersion::V10;
         let expected_type = "com.github.pull.create";
         let expected_source = "https://github.com/cloudevents/spec/pull";
         let expected_subject = "123";
