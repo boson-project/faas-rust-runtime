@@ -5,7 +5,6 @@ authors = ["slinkydeveloper <francescoguard@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-async-trait = "0.1.19"
 actix-web = "2.0.0-alpha.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -13,4 +12,4 @@ futures = "^0.3"
 hostname = "0.1.5"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-cloudevent = { path = "./cloudevent" }
+cloudevent = { path = "../cloudevent" }
