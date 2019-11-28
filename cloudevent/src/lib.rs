@@ -113,13 +113,17 @@ impl<
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Builder)]
 #[builder(setter(into, strip_option))]
 pub struct Event {
+    #[builder(default = "Uuid::new_v4().to_string()")]
     pub id: String,
 
+    #[builder(default = "get_hostname().unwrap_or(DEFAULT_SOURCE.to_string())")]
     pub source: String,
 
+    #[builder(default = "SpecVersion::V10")]
     #[serde(rename = "specversion")]
     pub spec_version: SpecVersion,
 
+    #[builder(default = "DEFAULT_TYPE.to_string()")]
     #[serde(rename = "type")]
     pub event_type: String,
 
@@ -140,16 +144,7 @@ pub struct Event {
 #[allow(non_snake_case)]
 impl Event {
     pub fn new() -> Event {
-        Event {
-            id: Uuid::new_v4().to_string(),
-            source: get_hostname().unwrap_or(DEFAULT_SOURCE.to_string()),
-            spec_version: SpecVersion::V03,
-            event_type: DEFAULT_TYPE.to_string(),
-            subject: None,
-            time: None,
-            payload: None,
-            extensions: HashMap::new(),
-        }
+        return EventBuilder::default().build().unwrap()
     }
 }
 
