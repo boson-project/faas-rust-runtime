@@ -15,5 +15,5 @@ pub fn get_bind_address() -> SocketAddr {
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(8080);
 
-    ([127, 0, 0, 1], port).into()
+    ([0, 0, 0, 0], port).into()
 }
