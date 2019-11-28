@@ -22,33 +22,32 @@ type UserFunction = fn(
 fn invoke_function(
     user_function: web::Data<UserFunction>,
     value: Option<(Encoding, Event)>,
-) -> Box<dyn Future<Item = HttpResponse, Error = actix_web::Error>> {
-    if let Some((encoding, event)) = value {
-        Box::new(user_function.get_ref()(Some(event))
-            .and_then(|res| response_writer::write_cloud_event(res, Some(encoding)).into_future())
-        )
-    } else {
-        Box::new(user_function.get_ref()(None)
-            .and_then(|res| response_writer::write_cloud_event(res, None).into_future())
-        )
-    }
+) -> impl Future<Item = HttpResponse, Error = actix_web::Error> {
+    // Unzip
+    let (encoding, event) = match value {
+        Some((encoding, event)) => (Some(encoding), Some(event)),
+        None => (None, None)
+    };
+
+    user_function.get_ref()(event)
+        .and_then(|res| response_writer::write_cloud_event(res, encoding).into_future())
 }
 
 fn handle_get_event(
     req: HttpRequest,
     user_function: web::Data<UserFunction>,
-) -> Box<dyn Future<Item = HttpResponse, Error = actix_web::Error>> {
-    return Box::new(request_reader::read_cloud_event(req, None)
-        .and_then(|r| invoke_function(user_function, r)))
+) -> impl Future<Item = HttpResponse, Error = actix_web::Error> {
+    return request_reader::read_cloud_event(req, None)
+        .and_then(|r| invoke_function(user_function, r))
 }
 
 fn handle_post_event(
     user_function: web::Data<UserFunction>,
     req: HttpRequest,
     body: web::Payload,
-) -> Box<dyn Future<Item = HttpResponse, Error = actix_web::Error>> {
-    return Box::new(request_reader::read_cloud_event(req, Some(body))
-        .and_then(|r| invoke_function(user_function, r)))
+) -> impl Future<Item = HttpResponse, Error = actix_web::Error> {
+    return request_reader::read_cloud_event(req, Some(body))
+        .and_then(|r| invoke_function(user_function, r))
 }
 
 pub fn start_runtime(user_function: UserFunction) {
