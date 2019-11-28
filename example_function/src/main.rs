@@ -1,9 +1,8 @@
 use cloudevent::{Event, Reader, Writer};
 use serde_json::json;
 
-pub fn function(
-    event: Option<Event>,
-) -> Box<dyn futures::Future<Item = Option<Event>, Error = actix_web::Error>> {
+#[faas_rust_macro::faas_function]
+pub async fn function(event: Option<Event>) -> Result<Option<Event>, actix_web::Error> {
     println!("Received {:?}", event);
     let input_json = event
         .read_payload()
@@ -18,8 +17,8 @@ pub fn function(
         .unwrap_or("World");
 
     let json = json!({ "Hello": name });
-    let mut result_ce = event.map(|e| e.clone()).unwrap_or(Event::new_V03());
+    let mut result_ce = event.map(|e| e.clone()).unwrap_or(Event::new());
     let _ = result_ce.write_payload("application/json", json);
 
-    Box::new(futures::finished(Some(result_ce)))
+    Ok(Some(result_ce))
 }
