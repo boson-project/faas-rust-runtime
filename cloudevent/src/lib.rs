@@ -58,7 +58,45 @@ pub struct Payload {
     #[serde(rename = "datacontenttype")]
     pub content_type: String,
 
-    pub data: String,
+    #[serde(with = "bytes_to_string")]
+    pub data: Vec<u8>,
+}
+
+mod bytes_to_string {
+    use serde::{Deserializer, Serializer, ser, de};
+    use serde::de::Visitor;
+    use std::fmt;
+
+    pub fn serialize<S>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        serializer.serialize_str(std::str::from_utf8(data).map_err(ser::Error::custom)?)
+    }
+
+    struct BytesBufferVisitor;
+
+    impl<'de> Visitor<'de> for BytesBufferVisitor {
+        type Value = Vec<u8>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string")
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+        {
+            Ok(value.into_bytes())
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+        where D: Deserializer<'de>
+    {
+        deserializer.deserialize_str(BytesBufferVisitor{})
+    }
+
 }
 
 type PayloadResult<T, E> = Option<Result<T, E>>;
@@ -154,7 +192,7 @@ impl Writer<serde_json::Value, serde_json::Error> for Event {
         content_type: &str,
         value: serde_json::Value,
     ) -> Result<(), serde_json::Error> {
-        let serialized = serde_json::to_string(&value)?;
+        let serialized = serde_json::to_vec(&value)?;
         self.payload = Some(Payload {
             content_type: String::from(content_type),
             data: serialized,
@@ -173,7 +211,7 @@ impl Reader<serde_json::Value, serde_json::Error> for Event {
 
         let p = self.payload.as_ref().unwrap();
         Some(
-            serde_json::from_str::<serde_json::Value>(p.data.as_str())
+            serde_json::from_slice::<serde_json::Value>(&p.data[..])
                 .map(|j| (p.content_type.clone(), j)),
         )
     }
@@ -296,7 +334,7 @@ mod tests {
             v.payload,
             Some(Payload {
                 content_type: expected_content_type.to_string(),
-                data: expected_data.to_string()
+                data: expected_data.as_bytes().into()
             })
         );
         assert!(!v.extensions.is_empty());
