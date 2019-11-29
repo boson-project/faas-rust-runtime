@@ -32,19 +32,7 @@ pub fn faas_function(_args: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         fn main() {
-            let addr: std::net::SocketAddr = faas_rust::get_bind_address();
-
-            println!("Starting server listening {}", addr);
-
-            actix_web::HttpServer::new(move || {
-                actix_web::App::new()
-                    .route("/", actix_web::web::get().to(handle_event))
-                    .route("/", actix_web::web::post().to(handle_event))
-            })
-            .bind(addr)
-            .expect(format!("Cannot bind to port {}", addr.port()).as_ref())
-            .run()
-            .unwrap();
+            faas_rust::start_runtime(|r| r.to(handle_event))
         }
     };
     gen.into()
