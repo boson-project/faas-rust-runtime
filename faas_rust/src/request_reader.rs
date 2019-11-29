@@ -43,7 +43,7 @@ macro_rules! unwrap_and_remove_header {
 pub async fn read_cloud_event(
     req: HttpRequest,
     payload: Bytes,
-) -> Result<Option<(Encoding, Event)>, actix_web::Error> {
+) -> Result<Option<(Encoding, Vec<Event>)>, actix_web::Error> {
     let mut headers: HeaderMap = req.headers().clone();
 
     if let Ok(ct) = unwrap_and_remove_header!(headers, "content-type") {
@@ -56,7 +56,7 @@ pub async fn read_cloud_event(
                 )))
             } else {
                 return parse_structured(payload).await
-                    .map(|ce| Some((Encoding::STRUCTURED, ce)))
+                    .map(|ce| Some((Encoding::STRUCTURED, vec![ce])))
             }
         } else {
             if payload.is_empty() {
@@ -66,14 +66,14 @@ pub async fn read_cloud_event(
                 )))
             } else {
                 return parse_binary(headers, Some((ct, payload))).await
-                        .map(|ce| Some((Encoding::BINARY, ce)))
+                        .map(|ce| Some((Encoding::BINARY, vec![ce])))
             }
         }
     }
 
     if headers.contains_key(CE_ID_HEADER) {
         return parse_binary(headers, None).await
-            .map(|ce| Some((Encoding::BINARY, ce)))
+            .map(|ce| Some((Encoding::BINARY, vec![ce])))
     }
 
     return Ok(None)
@@ -95,19 +95,13 @@ async fn parse_binary(
 
         let mut ce = Event::new();
         read_ce_headers(headers, &mut ce)?;
-        let body = std::str::from_utf8(&p);
-        if body.is_ok() {
+        if !p.is_empty() {
             ce.payload = Some(Payload {
                 content_type: ct,
-                data: String::from(body.unwrap()),
+                data: p.to_vec(),
             });
-            Ok(ce)
-        } else {
-            Err(actix_web::error::ErrorBadRequest(format!(
-                "Cannot decode body: {}",
-                body.err().unwrap()
-            )))
         }
+        Ok(ce)
     } else {
         let mut ce = Event::new();
         read_ce_headers(headers, &mut ce)?;

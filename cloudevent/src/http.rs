@@ -9,4 +9,5 @@ pub const CE_TIME_HEADER: &str = "ce-time";
 pub enum Encoding {
     BINARY,
     STRUCTURED,
+    BATCH
 }
