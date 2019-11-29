@@ -4,16 +4,18 @@ use cloudevent::http::*;
 
 const DEFAULT_ENCODING: Encoding = Encoding::BINARY;
 
-pub fn write_cloud_event(ce: Option<Event>, e: Option<Encoding>) -> Result<HttpResponse, actix_web::Error> {
-    if ce.is_some() {
+pub fn write_cloud_event(mut ce: Vec<Event>, e: Option<Encoding>) -> Result<HttpResponse, actix_web::Error> {
+    if ce.len() == 1 {
         let encoding = e.unwrap_or(DEFAULT_ENCODING);
 
         return match encoding {
-            Encoding::BINARY => write_binary(ce.unwrap()),
-            Encoding::STRUCTURED => write_structured(ce.unwrap())
+            Encoding::STRUCTURED => write_structured(ce.remove(0)),
+            _ => write_binary(ce.remove(0)),
         };
-    } else {
+    } else if ce.len() == 0 {
         return Ok(HttpResponse::Accepted().finish());
+    } else {
+        unimplemented!()
     }
 }
 
