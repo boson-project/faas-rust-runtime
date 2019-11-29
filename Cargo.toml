@@ -1,0 +1,11 @@
+[workspace]
+
+members = [
+    "faas_rust",
+    "faas_rust_macro",
+    "cloudevent"
+]
+
+exclude = [
+    "example_function"
+]
