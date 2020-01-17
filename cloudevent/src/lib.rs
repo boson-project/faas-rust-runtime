@@ -47,7 +47,7 @@ impl TryFrom<String> for SpecVersion {
         match value.as_str() {
             "0.2" => Ok(SpecVersion::V02),
             "0.3" => Ok(SpecVersion::V03),
-            "1.0-rc1" => Ok(SpecVersion::V10),
+            "1.0" => Ok(SpecVersion::V10),
             _ => Err(format!("Invalid specversion {}", value)),
         }
     }
