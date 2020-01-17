@@ -2,9 +2,9 @@ use actix_web::http::HeaderMap;
 use actix_web::web::Bytes;
 use actix_web::HttpRequest;
 use chrono::DateTime;
+use cloudevent::http::*;
 use cloudevent::{Event, Payload};
 use std::convert::TryInto;
-use cloudevent::http::*;
 
 macro_rules! unwrap_header {
     ($headers:expr, $key:expr) => {
@@ -53,35 +53,36 @@ pub async fn read_cloud_event(
                 return Err(actix_web::error::ErrorBadRequest(format!(
                     "No payload provided but content type is {}",
                     ct
-                )))
+                )));
             } else {
-                return parse_structured(payload).await
-                    .map(|ce| Some((Encoding::STRUCTURED, vec![ce])))
+                return parse_structured(payload)
+                    .await
+                    .map(|ce| Some((Encoding::STRUCTURED, vec![ce])));
             }
         } else {
             if payload.is_empty() {
                 return Err(actix_web::error::ErrorBadRequest(format!(
                     "No payload provided but content type is {}",
                     ct
-                )))
+                )));
             } else {
-                return parse_binary(headers, Some((ct, payload))).await
-                        .map(|ce| Some((Encoding::BINARY, vec![ce])))
+                return parse_binary(headers, Some((ct, payload)))
+                    .await
+                    .map(|ce| Some((Encoding::BINARY, vec![ce])));
             }
         }
     }
 
     if headers.contains_key(CE_ID_HEADER) {
-        return parse_binary(headers, None).await
-            .map(|ce| Some((Encoding::BINARY, vec![ce])))
+        return parse_binary(headers, None)
+            .await
+            .map(|ce| Some((Encoding::BINARY, vec![ce])));
     }
 
-    return Ok(None)
+    return Ok(None);
 }
 
-async fn parse_structured(
-    payload: Bytes,
-) -> Result<Event, actix_web::Error> {
+async fn parse_structured(payload: Bytes) -> Result<Event, actix_web::Error> {
     serde_json::from_slice::<Event>(&payload)
         .map_err(|e| actix_web::error::ErrorBadRequest(format!("{}", e)))
 }
@@ -113,10 +114,11 @@ fn read_ce_headers(mut headers: HeaderMap, ce: &mut Event) -> Result<(), actix_w
     if headers.contains_key(CE_ID_HEADER) {
         ce.id = unwrap_and_remove_header!(headers, CE_ID_HEADER)?;
         ce.event_type = unwrap_and_remove_header!(headers, CE_TYPE_HEADER)?;
-        ce.spec_version = unwrap_and_remove_header!(headers, CE_SPECVERSION_HEADER).and_then(|sv| {
-            sv.try_into()
-                .map_err(|e| actix_web::error::ErrorBadRequest(format!("{}", e)))
-        })?;
+        ce.spec_version =
+            unwrap_and_remove_header!(headers, CE_SPECVERSION_HEADER).and_then(|sv| {
+                sv.try_into()
+                    .map_err(|e| actix_web::error::ErrorBadRequest(format!("{}", e)))
+            })?;
         ce.source = unwrap_and_remove_header!(headers, CE_SOURCE_HEADER)?;
         ce.subject = unwrap_and_remove_header!(headers, CE_SUBJECT_HEADER).ok();
         ce.time = unwrap_and_remove_header!(headers, CE_TIME_HEADER)

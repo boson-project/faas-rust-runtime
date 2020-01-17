@@ -4,7 +4,7 @@ extern crate serde_json;
 pub mod request_reader;
 pub mod response_writer;
 
-use actix_web::{Route, guard};
+use actix_web::{guard, Route};
 use std::env;
 use std::net::SocketAddr;
 
@@ -38,16 +38,19 @@ pub fn start_runtime(route_mod_fn: fn(Route) -> Route) {
     let server = actix_web::HttpServer::new(move || {
         actix_web::App::new()
             .wrap(actix_web::middleware::Logger::default())
-            .route("/*", route_mod_fn(
-                actix_web::web::route()
-                    .guard(
-                        guard::Any(guard::Get()).or(guard::Post())
-                    )
-            ))
+            .route(
+                "/*",
+                route_mod_fn(
+                    actix_web::web::route().guard(guard::Any(guard::Get()).or(guard::Post())),
+                ),
+            )
     });
 
     if let Some(uds_address) = env::var(UNIX_DOMAIN_SOCKET_ENV).ok() {
-        println!("FaaS Runtime: Starting server listening Unix Domain Socket {}", uds_address);
+        println!(
+            "FaaS Runtime: Starting server listening Unix Domain Socket {}",
+            uds_address
+        );
         server
             .bind_uds(&uds_address)
             .expect(format!("Cannot bind uds {}", uds_address).as_ref())

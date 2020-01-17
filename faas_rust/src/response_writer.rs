@@ -1,10 +1,13 @@
 use actix_web::HttpResponse;
-use cloudevent::Event;
 use cloudevent::http::*;
+use cloudevent::Event;
 
 const DEFAULT_ENCODING: Encoding = Encoding::BINARY;
 
-pub fn write_cloud_event(mut ce: Vec<Event>, e: Option<Encoding>) -> Result<HttpResponse, actix_web::Error> {
+pub fn write_cloud_event(
+    mut ce: Vec<Event>,
+    e: Option<Encoding>,
+) -> Result<HttpResponse, actix_web::Error> {
     if ce.len() == 1 {
         let encoding = e.unwrap_or(DEFAULT_ENCODING);
 
@@ -43,11 +46,10 @@ fn write_binary(event: Event) -> Result<HttpResponse, actix_web::Error> {
 
 fn write_structured(event: Event) -> Result<HttpResponse, actix_web::Error> {
     serde_json::to_vec(&event)
-        .map(|j|
+        .map(|j| {
             HttpResponse::Ok()
                 .content_type("application/cloudevents+json")
                 .body(j)
-        ).map_err(|e|
-            actix_web::error::ErrorInternalServerError(e)
-        )
+        })
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e))
 }
