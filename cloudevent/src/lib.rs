@@ -63,13 +63,13 @@ pub struct Payload {
 }
 
 mod bytes_to_string {
-    use serde::{Deserializer, Serializer, ser, de};
     use serde::de::Visitor;
+    use serde::{de, ser, Deserializer, Serializer};
     use std::fmt;
 
     pub fn serialize<S>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_str(std::str::from_utf8(data).map_err(ser::Error::custom)?)
     }
@@ -84,19 +84,19 @@ mod bytes_to_string {
         }
 
         fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-            where
-                E: de::Error,
+        where
+            E: de::Error,
         {
             Ok(value.into_bytes())
         }
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(BytesBufferVisitor{})
+        deserializer.deserialize_str(BytesBufferVisitor {})
     }
-
 }
 
 type PayloadResult<T, E> = Option<Result<T, E>>;
@@ -184,7 +184,7 @@ pub struct Event {
 #[allow(non_snake_case)]
 impl Event {
     pub fn new() -> Event {
-        return EventBuilder::default().build().unwrap()
+        return EventBuilder::default().build().unwrap();
     }
 }
 

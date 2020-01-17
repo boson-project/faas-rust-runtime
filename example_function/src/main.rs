@@ -2,7 +2,10 @@ use cloudevent::{Event, Reader, Writer};
 use serde_json::json;
 
 #[faas_rust_macro::faas_function]
-pub async fn fold(last: Event, aggregator: Option<Event>) -> Result<Option<Event>, actix_web::Error> {
+pub async fn fold(
+    last: Event,
+    aggregator: Option<Event>,
+) -> Result<Option<Event>, actix_web::Error> {
     println!("Received {:?}", last);
     let input_json = last
         .read_payload()
