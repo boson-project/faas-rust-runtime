@@ -166,8 +166,10 @@ pub struct Event {
     pub event_type: String,
 
     #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
     #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<DateTime<FixedOffset>>,
 
     #[serde(flatten)]
