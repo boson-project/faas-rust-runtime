@@ -32,7 +32,7 @@ fn get_bind_address() -> SocketAddr {
     ([0, 0, 0, 0], port).into()
 }
 
-pub fn start_runtime(route_mod_fn: fn(Route) -> Route) {
+pub async fn start_runtime(route_mod_fn: fn(Route) -> Route) -> std::io::Result<()> {
     configure_logging();
 
     let server = actix_web::HttpServer::new(move || {
@@ -55,7 +55,7 @@ pub fn start_runtime(route_mod_fn: fn(Route) -> Route) {
             .bind_uds(&uds_address)
             .expect(format!("Cannot bind uds {}", uds_address).as_ref())
             .run()
-            .unwrap()
+            .await
     } else {
         let addr: std::net::SocketAddr = get_bind_address();
         println!("Starting server listening {}", addr);
@@ -63,6 +63,6 @@ pub fn start_runtime(route_mod_fn: fn(Route) -> Route) {
             .bind(addr)
             .expect(format!("Cannot bind address {}", addr).as_ref())
             .run()
-            .unwrap()
+            .await
     }
 }
