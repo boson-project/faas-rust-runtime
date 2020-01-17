@@ -15,8 +15,9 @@ pub fn faas_function(
 
     let user_function: TokenStream = item.into();
     let main_fn: TokenStream = quote! {
-        fn main() {
-            faas_rust::start_runtime(|r| r.to(handle_event))
+        #[actix_rt::main]
+        async fn main() -> std::io::Result<()> {
+            faas_rust::start_runtime(|r| r.to(handle_event)).await
         }
     };
     let handler = generate_handler(function_ast);
