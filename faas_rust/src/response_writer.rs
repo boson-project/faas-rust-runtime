@@ -1,24 +1,16 @@
 use actix_web::HttpResponse;
 use cloudevent::http::*;
 use cloudevent::Event;
+use crate::common::EventResponse;
+use serde::Serialize;
 
-const DEFAULT_ENCODING: Encoding = Encoding::BINARY;
-
-pub fn write_cloud_event(
-    mut ce: Vec<Event>,
-    e: Option<Encoding>,
-) -> Result<HttpResponse, actix_web::Error> {
-    if ce.len() == 1 {
-        let encoding = e.unwrap_or(DEFAULT_ENCODING);
-
-        return match encoding {
-            Encoding::STRUCTURED => write_structured(ce.remove(0)),
-            _ => write_binary(ce.remove(0)),
-        };
-    } else if ce.len() == 0 {
-        return Ok(HttpResponse::Accepted().finish());
-    } else {
-        unimplemented!()
+pub fn write_cloud_event(ce: EventResponse) -> Result<HttpResponse, actix_web::Error> {
+    return match ce {
+        EventResponse::Binary(Some(e)) => write_binary(e),
+        EventResponse::Structured(Some(e)) => serialize_and_write(e, CE_JSON_CONTENT_TYPE),
+        EventResponse::Bundle(map) => serialize_and_write(map, CE_BUNDLE_JSON_CONTENT_TYPE),
+        EventResponse::Batch(v) => serialize_and_write(v, CE_BATCH_JSON_CONTENT_TYPE),
+        _ => return Ok(HttpResponse::Accepted().finish())
     }
 }
 
@@ -44,11 +36,11 @@ fn write_binary(event: Event) -> Result<HttpResponse, actix_web::Error> {
     Ok(result)
 }
 
-fn write_structured(event: Event) -> Result<HttpResponse, actix_web::Error> {
-    serde_json::to_vec(&event)
+fn serialize_and_write<T: Serialize>(value: T, content_type: &str) -> Result<HttpResponse, actix_web::Error> {
+    serde_json::to_vec(&value)
         .map(|j| {
             HttpResponse::Ok()
-                .content_type("application/cloudevents+json")
+                .content_type(content_type)
                 .body(j)
         })
         .map_err(|e| actix_web::error::ErrorInternalServerError(e))
