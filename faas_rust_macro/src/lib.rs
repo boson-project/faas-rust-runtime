@@ -3,8 +3,9 @@ extern crate proc_macro;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
 use std::borrow::Borrow;
-use std::error::Error;
-use syn::{spanned::Spanned, FnArg, GenericArgument, Ident, Path, PathArguments, ReturnType, Type};
+use syn::{spanned::Spanned, FnArg, Ident, ReturnType, Type};
+
+mod types;
 
 #[proc_macro_attribute]
 pub fn faas_function(
@@ -12,25 +13,26 @@ pub fn faas_function(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let function_ast: syn::ItemFn = syn::parse(item.clone()).unwrap();
+    let out = impl_faas_function(function_ast);
+    out.into()
+}
 
-    let user_function: TokenStream = item.into();
+fn impl_faas_function(user_function: syn::ItemFn) -> TokenStream {
     let main_fn: TokenStream = quote! {
         #[actix_rt::main]
         async fn main() -> std::io::Result<()> {
             faas_rust::start_runtime(|r| r.to(handle_event)).await
         }
     };
-    let handler = generate_handler(function_ast);
+    let handler = generate_handler(user_function.clone());
 
-    let out = quote! {
+    quote! {
         use std::iter::FromIterator;
 
         #user_function
         #handler
         #main_fn
-    };
-
-    out.into()
+    }
 }
 
 fn generate_handler(function_ast: syn::ItemFn) -> TokenStream {
@@ -121,7 +123,7 @@ fn generate_handler(function_ast: syn::ItemFn) -> TokenStream {
 
 fn map_output(rt: &ReturnType) -> Option<TokenStream> {
     let result_type = match rt {
-        ReturnType::Type(_, ty) => extract_types_from_result(&ty),
+        ReturnType::Type(_, ty) => types::extract_types_from_result(&ty),
         _ => None,
     }?;
     let result_left = result_type.0;
@@ -144,110 +146,25 @@ fn map_output(rt: &ReturnType) -> Option<TokenStream> {
 }
 
 fn is_vec_event(ty: &Type) -> bool {
-    let extracted = extract_type_from_vec(ty);
+    let extracted = types::extract_types_from_vec(ty);
+    let type_matcher = types::generate_type_matcher("cloudevent::Event");
     match extracted {
-        Some(Type::Path(type_path)) => type_path.path.segments.last().unwrap().ident == "Event",
+        Some(t) => type_matcher(t),
         _ => false,
     }
 }
 
 fn is_option_event(ty: &Type) -> bool {
-    let extracted = extract_type_from_option(ty);
+    let extracted = types::extract_types_from_option(ty);
+    let type_matcher = types::generate_type_matcher("cloudevent::Event");
     match extracted {
-        Some(Type::Path(type_path)) => type_path.path.segments.last().unwrap().ident == "Event",
+        Some(t) => type_matcher(t),
         _ => false,
     }
 }
 
 fn is_event(ty: &Type) -> bool {
-    match ty {
-        Type::Path(type_path) => type_path.path.segments.last().unwrap().ident == "Event",
-        _ => false,
-    }
-}
-
-fn extract_type_from_vec(ty: &Type) -> Option<&Type> {
-    fn path_is_vec(path: &Path) -> bool {
-        path.leading_colon.is_none()
-            && path.segments.len() == 1
-            && path.segments.iter().next().unwrap().ident == "Vec"
-    }
-
-    match ty {
-        Type::Path(type_path) if type_path.qself.is_none() && path_is_vec(&type_path.path) => {
-            // Get the first segment of the path (there is only one, in fact: "Vec"):
-            let type_params = &type_path.path.segments.first().unwrap().arguments;
-            // It should have only on angle-bracketed param ("<String>"):
-            let generic_arg = match type_params {
-                PathArguments::AngleBracketed(params) => params.args.first().unwrap(),
-                _ => return None,
-            };
-            // This argument must be a type:
-            match generic_arg {
-                GenericArgument::Type(ty) => Some(ty),
-                _ => return None,
-            }
-        }
-        _ => return None,
-    }
-}
-
-fn extract_type_from_option(ty: &Type) -> Option<&Type> {
-    fn path_is_option(path: &Path) -> bool {
-        path.leading_colon.is_none()
-            && path.segments.len() == 1
-            && path.segments.iter().next().unwrap().ident == "Option"
-    }
-
-    match ty {
-        Type::Path(type_path) if type_path.qself.is_none() && path_is_option(&type_path.path) => {
-            // Get the first segment of the path (there is only one, in fact: "Option"):
-            let type_params = &type_path.path.segments.first().unwrap().arguments;
-            // It should have only on angle-bracketed param ("<String>"):
-            let generic_arg = match type_params {
-                PathArguments::AngleBracketed(params) => params.args.first().unwrap(),
-                _ => return None,
-            };
-            // This argument must be a type:
-            match generic_arg {
-                GenericArgument::Type(ty) => Some(ty),
-                _ => return None,
-            }
-        }
-        _ => return None,
-    }
-}
-
-fn extract_types_from_result(ty: &Type) -> Option<(&Type, &Type)> {
-    fn path_is_result(path: &Path) -> bool {
-        path.leading_colon.is_none()
-            && path.segments.len() == 1
-            && path.segments.iter().next().unwrap().ident == "Result"
-    }
-
-    match ty {
-        Type::Path(type_path) if type_path.qself.is_none() && path_is_result(&type_path.path) => {
-            let type_params = &type_path.path.segments.first().unwrap().arguments;
-            let generic_arguments: Vec<&Type> = match type_params {
-                PathArguments::AngleBracketed(params) => params
-                    .args
-                    .iter()
-                    .map(|ge| match ge {
-                        GenericArgument::Type(ty) => Some(ty),
-                        _ => return None,
-                    })
-                    .filter_map(|ty| ty)
-                    .collect(),
-                _ => return None,
-            };
-
-            match (generic_arguments.get(0), generic_arguments.get(1)) {
-                (Some(&left_ty), Some(&right_ty)) => return Some((left_ty, right_ty)),
-                _ => return None,
-            }
-        }
-        _ => return None,
-    }
+    types::generate_type_matcher("cloudevent::Event")(ty)
 }
 
 fn extract_type_from_fn_arg(fn_arg: &FnArg) -> Option<&Type> {
