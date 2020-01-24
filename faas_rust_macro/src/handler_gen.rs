@@ -9,10 +9,10 @@ pub(crate) fn generate_vec_handler_body(function_ast: &ItemFn) -> TokenStream {
     let user_function_invocation = generate_user_function_invocation(function_ast, vec![arg_ident]);
     quote_spanned! {function_ast.span()=>
         let _arg0: Vec<Event> = match input {
-            faas_rust::common::EventRequest::Binary(opt) => Ok(opt.iter().collect()),
+            faas_rust::common::EventRequest::Binary(opt) => Ok(opt.into_iter().collect()),
             faas_rust::common::EventRequest::Structured(opt) => {
                 was_binary = false;
-                Ok(opt.iter().collect())
+                Ok(opt.into_iter().collect())
             },
             faas_rust::common::EventRequest::Batch(v) => Ok(v),
             faas_rust::common::EventRequest::Bundle(_) => Err(actix_web::error::ErrorBadRequest(format!("This function doesn't accept cloudevent bundle")))
@@ -40,9 +40,9 @@ pub(crate) fn generate_single_event_handler_body(function_ast: &ItemFn, param_ty
     let user_function_invocation = generate_user_function_invocation(function_ast, vec![arg_ident]);
 
     let opt_unwrapped = if is_option_event(param_type) {
-        quote!{opt.ok_or(actix_web::error::ErrorBadRequest(format!("Expecting a non empty Event")))}
-    } else {
         quote!{Ok(opt)}
+    } else {
+        quote!{opt.ok_or(actix_web::error::ErrorBadRequest(format!("Expecting a non empty Event")))}
     };
 
     quote_spanned! {function_ast.span()=>
@@ -83,9 +83,12 @@ pub(crate) fn generate_multi_event_handler_body(function_ast: &ItemFn, params: V
                     let #var_name: Option<cloudevent::Event> = input_map.remove(#key_literal);
                 })
             } else {
+                let err = syn::Error::new_spanned(ident.clone(), "Type should be Event or Option<Event>").to_compile_error();
                 (
-                    var_name,
-                    syn::Error::new_spanned(ident, "Type should be Event or Option<Event>").to_compile_error()
+                    var_name.clone(),
+                    quote_spanned! {ident.span()=>
+                        let #var_name: Option<cloudevent::Event> = #err;
+                    }
                 )
             }
         })

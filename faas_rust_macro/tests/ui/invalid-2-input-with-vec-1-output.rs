@@ -6,5 +6,5 @@ pub async fn function(
     last: Vec<Event>,
     other: Event
 ) -> Result<Event, actix_web::Error> {
-    Ok(last)
+    Ok(other)
 }

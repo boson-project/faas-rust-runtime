@@ -3,8 +3,8 @@ use faas_rust_macro::faas_function;
 
 #[faas_function]
 pub async fn function(
-    last: Map<Event>,
+    last: std::collections::HashMap<Event>,
     other: Event,
 ) -> Result<Event, actix_web::Error> {
-    Ok(last)
+    Ok(other)
 }
