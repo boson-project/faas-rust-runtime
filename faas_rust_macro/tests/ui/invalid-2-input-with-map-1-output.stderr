@@ -1,0 +1,14 @@
+error: Type should be Event or Option<Event>
+ --> $DIR/invalid-2-input-with-map-1-output.rs:8:5
+  |
+8 |     last: std::collections::HashMap<String, Event>,
+  |     ^^^^
+
+error[E0308]: mismatched types
+ --> $DIR/invalid-2-input-with-map-1-output.rs:6:1
+  |
+6 | #[faas_function]
+  | ^^^^^^^^^^^^^^^^ expected struct `std::collections::HashMap`, found enum `std::option::Option`
+  |
+  = note: expected struct `std::collections::HashMap<std::string::String, cloudevent::Event>`
+               found enum `std::option::Option<cloudevent::Event>`

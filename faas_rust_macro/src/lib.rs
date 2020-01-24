@@ -58,6 +58,7 @@ fn generate_handler(function_ast: &syn::ItemFn) -> TokenStream {
     );
 
     let out = quote! {
+        #[allow(unused_variables)]
             async fn handle_event(
             req: actix_web::HttpRequest,
             body: actix_web::web::Bytes,

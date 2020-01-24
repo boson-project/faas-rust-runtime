@@ -1,0 +1,14 @@
+error: Type should be Event or Option<Event>
+ --> $DIR/invalid-2-input-with-vec-1-output.rs:8:5
+  |
+8 |     last: Vec<Event>,
+  |     ^^^^
+
+error[E0308]: mismatched types
+ --> $DIR/invalid-2-input-with-vec-1-output.rs:6:1
+  |
+6 | #[faas_function]
+  | ^^^^^^^^^^^^^^^^ expected struct `std::vec::Vec`, found enum `std::option::Option`
+  |
+  = note: expected struct `std::vec::Vec<cloudevent::Event>`
+               found enum `std::option::Option<cloudevent::Event>`

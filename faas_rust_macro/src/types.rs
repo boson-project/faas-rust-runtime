@@ -3,7 +3,7 @@ use syn::{GenericArgument, Path, PathArguments, Type};
 pub(crate) fn extract_generics(ty: &Type, path_matcher: impl Fn(&Path) -> bool) -> Vec<&Type> {
     match ty {
         Type::Path(type_path) if type_path.qself.is_none() && path_matcher(&type_path.path) => {
-            let type_params = &type_path.path.segments.first().unwrap().arguments;
+            let type_params = &type_path.path.segments.last().unwrap().arguments;
             return match type_params {
                 PathArguments::AngleBracketed(params) => params
                     .args
@@ -156,6 +156,21 @@ mod tests {
     #[test]
     fn extract_hashmap_ok() -> Result<(), syn::Error> {
         let parsed_result = &syn::parse_str("HashMap<A, B>")?;
+        let (left,right) = extract_types_from_hashmap(parsed_result).unwrap();
+        assert_eq!(
+            left,
+            &syn::parse_str::<syn::Type>("A")?
+        );
+        assert_eq!(
+            right,
+            &syn::parse_str::<syn::Type>("B")?
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn extract_hashmap_long_ok() -> Result<(), syn::Error> {
+        let parsed_result = &syn::parse_str("std::collections::HashMap<A, B>")?;
         let (left,right) = extract_types_from_hashmap(parsed_result).unwrap();
         assert_eq!(
             left,
