@@ -1,11 +1,24 @@
 extern crate proc_macro;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned};
-use std::borrow::Borrow;
-use syn::{spanned::Spanned, FnArg, Ident, ReturnType, Type};
+use quote::quote;
 
 mod types;
+mod input_parsing;
+mod handler_gen;
+
+// Allowed inputs:
+// - Event
+// - Option<Event>
+// - N Event followed by N Option<Event>
+// - HashMap<String, Event>
+// - Vec<Event>
+
+// Allowed outputs (wrapped in Result<X, actix_web::Error>):
+// - Event
+// - Option<Event>
+// - HashMap<String, Event>
+// - Vec<Event>
 
 #[proc_macro_attribute]
 pub fn faas_function(
@@ -24,7 +37,7 @@ fn impl_faas_function(user_function: syn::ItemFn) -> TokenStream {
             faas_rust::start_runtime(|r| r.to(handle_event)).await
         }
     };
-    let handler = generate_handler(user_function.clone());
+    let handler = generate_handler(&user_function);
 
     quote! {
         use std::iter::FromIterator;
@@ -35,141 +48,52 @@ fn impl_faas_function(user_function: syn::ItemFn) -> TokenStream {
     }
 }
 
-fn generate_handler(function_ast: syn::ItemFn) -> TokenStream {
-    let user_function_name = function_ast.sig.ident.clone();
-
-    // Function input
-
-    let input_extracted: Vec<(Ident, TokenStream)> = function_ast.sig.inputs
-        .iter()
-        .enumerate()
-        .map(|(i, arg)|
-            extract_type_from_fn_arg(arg)
-                .and_then(|ty| {
-                    let varname = format_ident!("_arg{}", i);
-                    if is_event(ty) {
-                        let num = i + 1;
-                        Some((varname.clone(), quote_spanned! {arg.span()=>
-                            let #varname: cloudevent::Event = events.pop().ok_or(actix_web::error::ErrorBadRequest(format!("Expecting event in position {}", #num)))?;
-                        }))
-                    } else if is_option_event(ty) {
-                        Some((varname.clone(), quote_spanned! {arg.span()=>
-                            let #varname: Option<cloudevent::Event> = events.pop();
-                        }))
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or((
-                    format_ident!("{}", "err"),
-                    syn::Error::new_spanned(arg, "Type should be Event or Option<Event>").to_compile_error()
-                ))
-
-        )
-        .collect();
-
-    let (input_extracted_ident, input_extracted_stmts): (Vec<Ident>, Vec<TokenStream>) =
-        input_extracted.iter().cloned().unzip();
-
-    // Function invocation
-
-    let mut user_function_invocation = quote! {
-            #user_function_name(#(#input_extracted_ident),*)
-    };
-
-    if function_ast.sig.asyncness.is_some() {
-        user_function_invocation = quote! {
-            #user_function_invocation.await
-        }
-    };
-
-    // Function output
-
-    let output_mapper: TokenStream = map_output(&function_ast.sig.output).unwrap_or(
+fn generate_handler(function_ast: &syn::ItemFn) -> TokenStream {
+    let inner_body = generate_handler_inner_body(function_ast);
+    let output_extraction = handler_gen::generate_output_extraction(&function_ast.sig.output).unwrap_or(
         syn::Error::new_spanned(
-            function_ast.sig,
-            "Return type should be Result<V, E>, where V is Vec<Event> or Option<Event> or Event",
-        )
-        .to_compile_error(),
+            &function_ast.sig.output,
+            "Return type should be Result<V, E>, where V is HashMap<String, Event> or Vec<Event> or Option<Event> or Event",
+        ).to_compile_error(),
     );
-
-    // fn handleEvent()
 
     let out = quote! {
             async fn handle_event(
             req: actix_web::HttpRequest,
             body: actix_web::web::Bytes,
         ) -> Result<actix_web::HttpResponse, actix_web::Error> {
-            let value = faas_rust::request_reader::read_cloud_event(req, body).await?;
+            let mut was_binary = true;
+            let input = faas_rust::request_reader::read_cloud_event(req, body).await?;
 
-            // Unzip
-            let (encoding, mut events) = match value {
-                Some((encoding, events)) => (Some(encoding), events),
-                None => (None, vec![])
-            };
+            #inner_body
 
-            events.reverse();
-
-            #(#input_extracted_stmts)*
-
-            let output = #user_function_invocation?;
-            let mapped_output: Vec<cloudevent::Event> = #output_mapper;
-            faas_rust::response_writer::write_cloud_event(mapped_output, encoding)
+            let output = #output_extraction;
+            faas_rust::response_writer::write_cloud_event(output)
         }
     };
 
     out.into()
 }
 
-fn map_output(rt: &ReturnType) -> Option<TokenStream> {
-    let result_type = match rt {
-        ReturnType::Type(_, ty) => types::extract_types_from_result(&ty),
-        _ => None,
-    }?;
-    let result_left = result_type.0;
+fn generate_handler_inner_body(function_ast: &syn::ItemFn) -> TokenStream {
+    // Function input
+    let mut extracted_fn_params = input_parsing::extract_fn_params(&function_ast);
 
-    if is_vec_event(result_left) {
-        Some(quote! {
-        output
-        })
-    } else if is_option_event(result_left) {
-        Some(quote! {
-        Vec::from_iter(output.into_iter());
-        })
-    } else if is_event(result_left) {
-        Some(quote! {
-        vec![output]
-        })
-    } else {
-        None
+    if extracted_fn_params.is_empty() {
+        return handler_gen::generate_no_input_handler_body(function_ast)
     }
-}
-
-fn is_vec_event(ty: &Type) -> bool {
-    let extracted = types::extract_types_from_vec(ty);
-    let type_matcher = types::generate_type_matcher("cloudevent::Event");
-    match extracted {
-        Some(t) => type_matcher(t),
-        _ => false,
+    if extracted_fn_params.len() == 1 {
+        let (_, ty) = extracted_fn_params.remove(0);
+        if types::is_vec_event(ty) {
+            // Generate Vec<Event> input case
+            return handler_gen::generate_vec_handler_body(function_ast)
+        } else if types::is_hashmap_event(ty) {
+            // Generate HashMap<String, Event> input case
+            return handler_gen::generate_hashmap_handler_body(function_ast)
+        } else {
+            // Generate Event or Option<Event> input case
+            return handler_gen::generate_single_event_handler_body(function_ast, ty)
+        }
     }
-}
-
-fn is_option_event(ty: &Type) -> bool {
-    let extracted = types::extract_types_from_option(ty);
-    let type_matcher = types::generate_type_matcher("cloudevent::Event");
-    match extracted {
-        Some(t) => type_matcher(t),
-        _ => false,
-    }
-}
-
-fn is_event(ty: &Type) -> bool {
-    types::generate_type_matcher("cloudevent::Event")(ty)
-}
-
-fn extract_type_from_fn_arg(fn_arg: &FnArg) -> Option<&Type> {
-    match fn_arg {
-        FnArg::Typed(ty) => Some(ty.ty.borrow()),
-        _ => None,
-    }
+    return handler_gen::generate_multi_event_handler_body(function_ast, extracted_fn_params)
 }

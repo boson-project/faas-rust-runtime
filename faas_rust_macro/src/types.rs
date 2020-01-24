@@ -83,6 +83,35 @@ pub(crate) fn extract_types_from_vec(ty: &Type) -> Option<&Type> {
     }
 }
 
+pub(crate) fn is_vec_event(ty: &Type) -> bool {
+    let extracted = extract_types_from_vec(ty);
+    match extracted {
+        Some(t) => is_event(t),
+        _ => false,
+    }
+}
+
+pub(crate) fn is_hashmap_event(ty: &Type) -> bool {
+    let extracted = extract_types_from_hashmap(ty);
+    let string_matcher = generate_type_matcher("std::string::String");
+    match extracted {
+        Some((left, right)) => string_matcher(left) && is_event(right),
+        _ => false,
+    }
+}
+
+pub(crate) fn is_option_event(ty: &Type) -> bool {
+    let extracted = extract_types_from_option(ty);
+    match extracted {
+        Some(t) => is_event(t),
+        _ => false,
+    }
+}
+
+pub(crate) fn is_event(ty: &Type) -> bool {
+    generate_type_matcher("cloudevent::Event")(ty)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

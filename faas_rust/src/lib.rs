@@ -3,7 +3,7 @@ extern crate serde_json;
 
 pub mod request_reader;
 pub mod response_writer;
-mod common;
+pub mod common;
 
 use actix_web::{guard, Route};
 use std::env;
