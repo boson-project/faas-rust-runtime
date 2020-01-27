@@ -37,24 +37,38 @@ pub(crate) fn generate_hashmap_handler_body(function_ast: &ItemFn) -> TokenStrea
 
 pub(crate) fn generate_single_event_handler_body(function_ast: &ItemFn, param_type: &Type) -> TokenStream {
     let arg_ident = Ident::new("_arg0", function_ast.span());
-    let user_function_invocation = generate_user_function_invocation(function_ast, vec![arg_ident]);
+    let user_function_invocation = generate_user_function_invocation(function_ast, vec![arg_ident.clone()]);
 
-    let opt_unwrapped = if is_option_event(param_type) {
-        quote!{Ok(opt)}
-    } else {
-        quote!{opt.ok_or(actix_web::error::ErrorBadRequest(format!("Expecting a non empty Event")))}
+    let mut input_match = quote!{
+        match input {
+            faas_rust::common::EventRequest::Binary(opt) => Ok(opt),
+            faas_rust::common::EventRequest::Structured(opt) => {
+                was_binary = false;
+                Ok(opt)
+            },
+            faas_rust::common::EventRequest::Batch(mut v) => {
+                if v.len() > 1 {
+                    Err(actix_web::error::ErrorBadRequest("This function doesn't accept cloudevent batch with size > 1"))
+                } else {
+                    Ok(v.drain(..).last())
+                }
+            },
+            faas_rust::common::EventRequest::Bundle(mut m) => {
+                if m.len() > 1 {
+                    Err(actix_web::error::ErrorBadRequest("This function doesn't accept cloudevent bundle with size > 1"))
+                } else {
+                    Ok(m.drain().last().map(|(_, val)| val))
+                }
+            }
+        }?
+    };
+
+    if !is_option_event(param_type) {
+        input_match = quote!{#input_match.ok_or(actix_web::error::ErrorBadRequest("Expecting a non empty Event"))?}
     };
 
     quote_spanned! {function_ast.span()=>
-        let _arg0: #param_type = match input {
-            faas_rust::common::EventRequest::Binary(opt) => #opt_unwrapped,
-            faas_rust::common::EventRequest::Structured(opt) => {
-                was_binary = false;
-                #opt_unwrapped
-            },
-            faas_rust::common::EventRequest::Batch(_) => Err(actix_web::error::ErrorBadRequest(format!("This function doesn't accept cloudevent batch"))),
-            faas_rust::common::EventRequest::Bundle(_) => Err(actix_web::error::ErrorBadRequest(format!("This function doesn't accept cloudevent bundle")))
-        }?;
+        let #arg_ident: #param_type = #input_match;
         let function_output = #user_function_invocation?;
     }
 }
